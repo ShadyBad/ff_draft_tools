@@ -4,12 +4,12 @@ A Python tool that aggregates fantasy football rankings from multiple expert sou
 
 ## Features
 
-- 🏈 **Multi-Source Rankings**: Aggregates data from FantasyPros and Yahoo (more sources coming soon)
+- 🏈 **Multi-Source Rankings**: Aggregates data from FantasyPros, ESPN, and Yahoo
 - 📊 **Value-Based Drafting (VBD)**: Calculate VORP with multiple baseline methodologies
 - 🎯 **Cross-Positional Value**: Fair comparison of players across all positions
 - 📈 **Tier-Based Analysis**: Players grouped into value tiers
 - 💰 **Projected Points**: Fantasy point projections for all players
-- 📑 **Multiple Export Formats**: CSV with VORP values and Google Sheets
+- 📑 **Multiple Export Formats**: CSV files and Google Sheets with live draft tracking
 - 🎮 **Draft Day Optimized**: Fast, offline-capable, mobile-friendly
 - ⚙️ **Customizable**: Support for PPR, Half-PPR, and Standard scoring
 
@@ -18,7 +18,7 @@ A Python tool that aggregates fantasy football rankings from multiple expert sou
 ### Prerequisites
 
 - Python 3.8+
-- Google Cloud account (for Google Sheets export)
+- Google Cloud account (optional, for Google Sheets export)
 
 ### Installation
 
@@ -62,6 +62,12 @@ python main.py vbd-info
 # Force refresh (ignore cache)
 python main.py fetch-rankings --force-refresh --use-vbd
 
+# Export to Google Sheets
+python main.py fetch-rankings --export-format sheets
+
+# Set up Google Sheets authentication
+python main.py setup-sheets
+
 # Use a platform preset
 python main.py use-preset yahoo_half_ppr
 
@@ -74,12 +80,22 @@ python main.py cleanup --keep 5
 
 ### Export Formats
 
-The tool generates multiple CSV files:
+#### CSV Files
+The tool generates multiple CSV files in `data/output/latest/`:
 
 1. **Overall Rankings** - All players with consensus rankings, VORP, and projections
 2. **Position Rankings** - Separate files for each position with VORP values
 3. **Cheat Sheet** - Condensed draft reference with VORP for quick decisions
 4. **Tier Rankings** - Players grouped by position and tier
+
+#### Google Sheets
+With `--export-format sheets`, creates a comprehensive draft spreadsheet with:
+
+1. **Overall Rankings** - Complete player data with tier coloring
+2. **Position Sheets** - Filtered views for each position
+3. **Cheat Sheet** - Printable format with draft tracking
+4. **Draft Board** - Live draft tracking with value indicators
+5. **Instructions** - How to use the draft tools
 
 ### Value-Based Drafting (VBD)
 
@@ -93,10 +109,14 @@ VBD helps you make better draft decisions by comparing players across positions:
 
 To enable Google Sheets export:
 
-1. Create a Google Cloud service account
-2. Download the credentials JSON file
-3. Place it in `credentials/service_account.json`
-4. Share your target Google Sheet with the service account email
+1. Run `python main.py setup-sheets` for setup instructions
+2. Create a Google Cloud service account
+3. Enable Google Sheets API and Google Drive API
+4. Download the credentials JSON file
+5. Save it as `credentials/service_account.json`
+6. Run `python main.py fetch-rankings --export-format sheets`
+
+The tool will automatically create and format your draft sheet!
 
 ## Configuration
 
@@ -153,13 +173,14 @@ make test
 ## Roadmap
 
 - [x] FantasyPros scraper
+- [x] ESPN scraper with fallback data
+- [x] Yahoo API integration
 - [x] Consensus ranking algorithm
 - [x] CSV export
 - [x] Value-Based Drafting (VBD/VORP)
 - [x] Multiple VBD baselines (VOLS, VORP, BEER)
 - [x] Fantasy point projections
-- [x] Yahoo API integration
-- [ ] Google Sheets live sync
+- [x] Google Sheets export with live draft tracking
 - [ ] Risk analysis (uncertainty & volatility)
 - [ ] Monte Carlo draft simulator
 - [ ] Portfolio optimization
