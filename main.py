@@ -12,11 +12,12 @@ from rich.progress import track
 # Set up production logging first
 from src.utils.logging import setup_logging, get_logger
 
-from src.scrapers import FantasyProsScraper
+from src.scrapers import FantasyProsScraper, ESPNScraper
 from src.scrapers.yahoo import YahooScraper
 from src.scrapers.yahoo_api import YahooAPIScraper
 from src.core import RankingAggregator, ConsensusRanking
 from src.exporters import CSVExporter
+from src.exporters.google_sheets import GoogleSheetsExporter
 from src.utils.validation import InputValidator, ValidationError
 from src.utils.monitoring import monitor
 from config import DEFAULT_SETTINGS, PLATFORM_PRESETS, DATA_DIR
@@ -38,6 +39,7 @@ def cli(ctx, debug):
       list-rankings   - Show available ranking exports
       cleanup         - Clean up old ranking archives
       use-preset      - Use a platform preset configuration
+      setup-sheets    - Configure Google Sheets authentication
       setup-yahoo     - Configure Yahoo Fantasy API
       mock-draft      - Run a mock draft simulation (coming soon)
     
@@ -136,6 +138,20 @@ def fetch_rankings(ctx, force_refresh: bool, export_format: str, max_players: in
                 logger.debug(f"Yahoo scraper error: {e}")
                 console.print("[yellow]○[/yellow] Yahoo: Currently unavailable")
     
+    # ESPN rankings
+    with console.status("[yellow]• Fetching ESPN rankings...[/yellow]"):
+        try:
+            espn_scraper = ESPNScraper()
+            espn_rankings = espn_scraper.fetch(force_refresh=force_refresh)
+            if espn_rankings:
+                source_rankings['espn'] = espn_rankings
+                console.print(f"[green]✓[/green] ESPN: {len(espn_rankings)} players")
+            else:
+                console.print("[yellow]○[/yellow] ESPN: Currently unavailable")
+        except Exception as e:
+            logger.debug(f"ESPN scraper error: {e}")
+            console.print("[yellow]○[/yellow] ESPN: Currently unavailable")
+    
     if not source_rankings:
         console.print("\n[red]Error: No ranking data available. Please try again later.[/red]")
         sys.exit(1)
@@ -180,7 +196,7 @@ def fetch_rankings(ctx, force_refresh: bool, export_format: str, max_players: in
         export_csv_rankings(consensus_rankings, max_players)
     
     if export_format in ['all', 'sheets']:
-        console.print("\n[dim]Note: Google Sheets export requires additional setup. Run 'setup-sheets' for details.[/dim]")
+        export_sheets_rankings(consensus_rankings, max_players)
     
     console.print("\n[bold green]✓ Draft rankings ready![/bold green]")
     console.print("\n[dim]Tip: Use --use-vbd for Value-Based Drafting rankings[/dim]")
@@ -207,6 +223,45 @@ def use_preset(preset: str):
 def mock_draft():
     """Run a mock draft simulation"""
     console.print("[yellow]Mock draft feature coming soon![/yellow]")
+
+
+@cli.command()
+def setup_sheets():
+    """Set up Google Sheets authentication"""
+    console.print("\n[bold]Google Sheets Setup[/bold]")
+    console.print("="*60)
+    
+    # Check if already authenticated
+    exporter = GoogleSheetsExporter()
+    if exporter.is_authenticated():
+        console.print("[green]✓[/green] Google Sheets authentication is already configured!")
+        console.print("\nTesting connection...")
+        
+        # Test by creating a sample sheet
+        sheet_id = exporter.create_draft_sheet("FF Draft Tools - Test Sheet")
+        if sheet_id:
+            url = exporter.get_sheet_url(sheet_id)
+            console.print(f"[green]✓[/green] Successfully created test sheet: {url}")
+            console.print("\n[dim]You can delete this test sheet if you don't need it.[/dim]")
+        else:
+            console.print("[red]✗[/red] Failed to create test sheet. Check your credentials.")
+    else:
+        console.print("\n[yellow]Google Sheets authentication not configured![/yellow]")
+        console.print("\nTo use Google Sheets export, you need to:")
+        console.print("\n[bold]Option 1: Service Account (Recommended)[/bold]")
+        console.print("1. Go to [link]https://console.cloud.google.com[/link]")
+        console.print("2. Create a new project or select existing")
+        console.print("3. Enable Google Sheets API and Google Drive API")
+        console.print("4. Create a service account and download JSON key")
+        console.print("5. Save the JSON file as: credentials/service_account.json")
+        console.print("\n[bold]Option 2: Environment Variable[/bold]")
+        console.print("Set GOOGLE_SERVICE_ACCOUNT_JSON with the JSON content")
+        console.print("\n[dim]Run this command again after setting up credentials.[/dim]")
+        
+        # Offer to open browser
+        import webbrowser
+        if click.confirm("\nOpen Google Cloud Console in browser?"):
+            webbrowser.open("https://console.cloud.google.com")
 
 
 @cli.command()
@@ -571,6 +626,58 @@ def export_csv_rankings(rankings: List[ConsensusRanking], max_players: int):
             logger.error(f"Export failed: {e}")
             console.print("\n[red]Error: Failed to export rankings.[/red]")
             raise
+
+
+def export_sheets_rankings(rankings: List[ConsensusRanking], max_players: int):
+    """Export rankings to Google Sheets"""
+    logger = get_logger(__name__)
+    
+    with console.status("[yellow]Setting up Google Sheets...[/yellow]"):
+        try:
+            exporter = GoogleSheetsExporter()
+            
+            if not exporter.is_authenticated():
+                console.print("\n[yellow]⚠[/yellow] Google Sheets not configured. Run 'setup-sheets' first.")
+                return
+            
+            # Create draft sheet
+            sheet_id = exporter.create_draft_sheet()
+            if not sheet_id:
+                console.print("\n[red]Error: Failed to create Google Sheet.[/red]")
+                return
+            
+            # Update with rankings
+            console.status("[yellow]Uploading rankings to Google Sheets...[/yellow]")
+            
+            # Overall rankings
+            success = exporter.update_rankings(sheet_id, rankings[:max_players])
+            if not success:
+                console.print("\n[red]Error: Failed to update rankings.[/red]")
+                return
+            
+            # Position-specific sheets
+            exporter.update_by_position(sheet_id, rankings[:max_players])
+            
+            # Create cheat sheet
+            exporter.create_cheat_sheet(sheet_id, rankings[:max_players])
+            
+            # Enable live draft mode
+            exporter.enable_live_draft_mode(sheet_id)
+            
+            # Show success
+            url = exporter.get_sheet_url(sheet_id)
+            console.print(f"\n[green]✓[/green] Google Sheet created: [cyan]{url}[/cyan]")
+            console.print("\n[bold]Features:[/bold]")
+            console.print("  • [green]Overall Rankings[/green] - All players with VORP")
+            console.print("  • [green]Position Sheets[/green] - Filtered by position")
+            console.print("  • [green]Cheat Sheet[/green] - Printable draft reference")
+            console.print("  • [green]Draft Board[/green] - Track picks during draft")
+            console.print("  • [green]Live Updates[/green] - Changes auto-save")
+            
+        except Exception as e:
+            logger.error(f"Google Sheets export failed: {e}")
+            console.print("\n[red]Error: Failed to export to Google Sheets.[/red]")
+            console.print("[dim]Run 'setup-sheets' to configure authentication.[/dim]")
 
 
 if __name__ == '__main__':

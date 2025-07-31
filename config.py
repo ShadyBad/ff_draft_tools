@@ -82,6 +82,11 @@ RANKING_SOURCES = {
         "url": "https://football.fantasysports.yahoo.com/f1/draftanalysis",
         "weight": 0.8,
         "cache_hours": 12
+    },
+    "espn": {
+        "url": "https://fantasy.espn.com/football/players/projections",
+        "weight": 0.9,
+        "cache_hours": 12
     }
 }
 
