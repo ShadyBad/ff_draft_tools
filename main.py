@@ -12,7 +12,7 @@ from rich.progress import track
 # Set up production logging first
 from src.utils.logging import setup_logging, get_logger
 
-from src.scrapers import FantasyProsScraper, ESPNScraper
+from src.scrapers import FantasyProsScraper, ESPNScraper, NFLScraper, CBSScraper
 from src.scrapers.yahoo import YahooScraper
 from src.scrapers.yahoo_api import YahooAPIScraper
 from src.core import RankingAggregator, ConsensusRanking
@@ -40,6 +40,7 @@ def cli(ctx, debug):
       cleanup         - Clean up old ranking archives
       use-preset      - Use a platform preset configuration
       setup-sheets    - Configure Google Sheets authentication
+      create-sheet    - Help creating a Google Sheet manually
       setup-yahoo     - Configure Yahoo Fantasy API
       mock-draft      - Run a mock draft simulation (coming soon)
     
@@ -63,8 +64,9 @@ def cli(ctx, debug):
 @click.option('--use-vbd', is_flag=True, help='Apply Value-Based Drafting (VORP) calculations')
 @click.option('--vbd-baseline', type=click.Choice(['vols', 'vorp', 'beer']), default='vorp', 
               help='VBD baseline: vols=Value Over Last Starter, vorp=Value Over Replacement, beer=Best Ever Evaluation')
+@click.option('--sheet-id', type=str, help='Use existing Google Sheet ID instead of creating new one')
 @click.pass_context
-def fetch_rankings(ctx, force_refresh: bool, export_format: str, max_players: int, use_vbd: bool, vbd_baseline: str):
+def fetch_rankings(ctx, force_refresh: bool, export_format: str, max_players: int, use_vbd: bool, vbd_baseline: str, sheet_id: str):
     """Fetch rankings from all sources and export"""
     logger = get_logger(__name__)
     
@@ -152,6 +154,34 @@ def fetch_rankings(ctx, force_refresh: bool, export_format: str, max_players: in
             logger.debug(f"ESPN scraper error: {e}")
             console.print("[yellow]○[/yellow] ESPN: Currently unavailable")
     
+    # NFL.com rankings
+    with console.status("[yellow]• Fetching NFL.com rankings...[/yellow]"):
+        try:
+            nfl_scraper = NFLScraper()
+            nfl_rankings = nfl_scraper.fetch(force_refresh=force_refresh)
+            if nfl_rankings:
+                source_rankings['nfl'] = nfl_rankings
+                console.print(f"[green]✓[/green] NFL.com: {len(nfl_rankings)} players")
+            else:
+                console.print("[yellow]○[/yellow] NFL.com: Currently unavailable")
+        except Exception as e:
+            logger.debug(f"NFL.com scraper error: {e}")
+            console.print("[yellow]○[/yellow] NFL.com: Currently unavailable")
+    
+    # CBS Sports rankings
+    with console.status("[yellow]• Fetching CBS Sports rankings...[/yellow]"):
+        try:
+            cbs_scraper = CBSScraper()
+            cbs_rankings = cbs_scraper.fetch(force_refresh=force_refresh)
+            if cbs_rankings:
+                source_rankings['cbs'] = cbs_rankings
+                console.print(f"[green]✓[/green] CBS Sports: {len(cbs_rankings)} players")
+            else:
+                console.print("[yellow]○[/yellow] CBS Sports: Currently unavailable")
+        except Exception as e:
+            logger.debug(f"CBS Sports scraper error: {e}")
+            console.print("[yellow]○[/yellow] CBS Sports: Currently unavailable")
+    
     if not source_rankings:
         console.print("\n[red]Error: No ranking data available. Please try again later.[/red]")
         sys.exit(1)
@@ -196,7 +226,7 @@ def fetch_rankings(ctx, force_refresh: bool, export_format: str, max_players: in
         export_csv_rankings(consensus_rankings, max_players)
     
     if export_format in ['all', 'sheets']:
-        export_sheets_rankings(consensus_rankings, max_players)
+        export_sheets_rankings(consensus_rankings, max_players, sheet_id)
     
     console.print("\n[bold green]✓ Draft rankings ready![/bold green]")
     console.print("\n[dim]Tip: Use --use-vbd for Value-Based Drafting rankings[/dim]")
@@ -226,6 +256,40 @@ def mock_draft():
 
 
 @cli.command()
+def create_sheet():
+    """Create a new Google Sheet manually and get the ID"""
+    console.print("\n[bold]Creating Google Sheet Manually[/bold]")
+    console.print("="*60)
+    console.print("\nIf automatic sheet creation fails, you can:")
+    console.print("\n1. Go to [link]https://sheets.google.com[/link]")
+    console.print("2. Create a new blank spreadsheet")
+    console.print("3. The sheet ID is in the URL after /spreadsheets/d/")
+    console.print("   Example: https://docs.google.com/spreadsheets/d/[yellow]SHEET_ID_HERE[/yellow]/edit")
+    console.print("\n4. Use the sheet ID with: [cyan]python main.py fetch-rankings --sheet-id YOUR_SHEET_ID[/cyan]")
+    
+    # Try to get service account email
+    try:
+        import json
+        from pathlib import Path
+        service_account_path = Path("credentials/service_account.json")
+        if service_account_path.exists():
+            with open(service_account_path) as f:
+                service_account = json.load(f)
+                email = service_account.get('client_email', 'your-service-account@email')
+                console.print(f"\n5. Share the sheet with: [yellow]{email}[/yellow]")
+                console.print("   Give it 'Editor' permissions")
+        else:
+            console.print("\n5. Share the sheet with your service account email (check credentials/service_account.json)")
+    except:
+        console.print("\n5. Share the sheet with your service account email (check credentials/service_account.json)")
+    
+    # Offer to open browser
+    import webbrowser
+    if click.confirm("\nOpen Google Sheets in browser?"):
+        webbrowser.open("https://sheets.google.com")
+
+
+@cli.command()
 def setup_sheets():
     """Set up Google Sheets authentication"""
     console.print("\n[bold]Google Sheets Setup[/bold]")
@@ -237,14 +301,26 @@ def setup_sheets():
         console.print("[green]✓[/green] Google Sheets authentication is already configured!")
         console.print("\nTesting connection...")
         
-        # Test by creating a sample sheet
-        sheet_id = exporter.create_draft_sheet("FF Draft Tools - Test Sheet")
-        if sheet_id:
-            url = exporter.get_sheet_url(sheet_id)
-            console.print(f"[green]✓[/green] Successfully created test sheet: {url}")
-            console.print("\n[dim]You can delete this test sheet if you don't need it.[/dim]")
-        else:
-            console.print("[red]✗[/red] Failed to create test sheet. Check your credentials.")
+        # Test by listing files instead of creating one
+        try:
+            # Try to list spreadsheets to verify connection
+            spreadsheets = exporter.client.list_spreadsheet_files()
+            console.print(f"[green]✓[/green] Successfully connected! Found {len(spreadsheets)} spreadsheets in your account.")
+            console.print("\n[dim]Google Sheets export is ready to use.[/dim]")
+        except Exception as e:
+            # If listing fails, try creating as fallback
+            sheet_id = exporter.create_draft_sheet("FF Draft Tools - Test Sheet")
+            if sheet_id:
+                url = exporter.get_sheet_url(sheet_id)
+                console.print(f"[green]✓[/green] Successfully created test sheet: {url}")
+                console.print("\n[dim]You can delete this test sheet if you don't need it.[/dim]")
+            else:
+                console.print("[red]✗[/red] Failed to verify connection.")
+                console.print(f"\n[yellow]Error details:[/yellow] {str(e)}")
+                console.print("\n[dim]Possible issues:[/dim]")
+                console.print("• Check if you've exceeded Google Sheets limits")
+                console.print("• Verify your service account has proper permissions")
+                console.print("• Try using the tool with a specific sheet ID instead of creating new ones")
     else:
         console.print("\n[yellow]Google Sheets authentication not configured![/yellow]")
         console.print("\nTo use Google Sheets export, you need to:")
@@ -628,7 +704,7 @@ def export_csv_rankings(rankings: List[ConsensusRanking], max_players: int):
             raise
 
 
-def export_sheets_rankings(rankings: List[ConsensusRanking], max_players: int):
+def export_sheets_rankings(rankings: List[ConsensusRanking], max_players: int, existing_sheet_id: str = None):
     """Export rankings to Google Sheets"""
     logger = get_logger(__name__)
     
@@ -640,11 +716,37 @@ def export_sheets_rankings(rankings: List[ConsensusRanking], max_players: int):
                 console.print("\n[yellow]⚠[/yellow] Google Sheets not configured. Run 'setup-sheets' first.")
                 return
             
-            # Create draft sheet
-            sheet_id = exporter.create_draft_sheet()
-            if not sheet_id:
-                console.print("\n[red]Error: Failed to create Google Sheet.[/red]")
-                return
+            # Use provided sheet ID if available
+            if existing_sheet_id:
+                sheet_id = existing_sheet_id
+                console.print(f"\n[cyan]Using existing sheet ID:[/cyan] {sheet_id}")
+            else:
+                # Try to find existing sheet first
+                existing = exporter.find_existing_sheet("FF Draft Rankings")
+                if existing:
+                    console.print(f"\n[yellow]Found existing sheet:[/yellow] {existing['name']}")
+                    if click.confirm("Use this sheet instead of creating a new one?"):
+                        sheet_id = existing['id']
+                    else:
+                        # Create new sheet
+                        sheet_id = exporter.create_draft_sheet()
+                        if not sheet_id:
+                            console.print("\n[red]Error: Failed to create Google Sheet.[/red]")
+                            console.print("[yellow]Note:[/yellow] The 'storage quota exceeded' error can mean:")
+                            console.print("• You've hit Google's limit on number of sheets")
+                            console.print("• Try deleting old sheets or using an existing one")
+                            console.print("\n[cyan]Tip:[/cyan] Use --sheet-id option with an existing sheet ID")
+                            return
+                else:
+                    # Create new sheet
+                    sheet_id = exporter.create_draft_sheet()
+                    if not sheet_id:
+                        console.print("\n[red]Error: Failed to create Google Sheet.[/red]")
+                        console.print("[yellow]Note:[/yellow] The 'storage quota exceeded' error can mean:")
+                        console.print("• You've hit Google's limit on number of sheets")
+                        console.print("• Try deleting old sheets from your Google Drive")
+                        console.print("\n[cyan]Tip:[/cyan] Use --sheet-id option with an existing sheet ID")
+                        return
             
             # Update with rankings
             console.status("[yellow]Uploading rankings to Google Sheets...[/yellow]")

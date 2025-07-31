@@ -44,6 +44,11 @@ class VBDCalculator:
         self.num_teams = self.settings.get("teams", 12)
         self.roster = self.settings.get("roster", DEFAULT_SETTINGS["roster"])
         
+        # Add aliases for compatibility
+        self.teams = self.num_teams
+        self.roster_slots = self.roster
+        self.flex_positions = {Position.RB, Position.WR, Position.TE}
+        
         # Cache for baseline calculations
         self._baseline_cache = {}
     

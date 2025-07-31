@@ -99,7 +99,9 @@ class OptimizedCache:
         # Use hash to handle long keys and special characters
         key_hash = hashlib.md5(key.encode()).hexdigest()
         extension = '.pkl.gz' if self.use_compression else '.pkl'
-        return self.cache_dir / f"{key_hash}_{key[:20]}{extension}"
+        # Only use alphanumeric characters from key for readability
+        safe_key = ''.join(c for c in key[:20] if c.isalnum() or c in '-_')
+        return self.cache_dir / f"{key_hash}_{safe_key}{extension}"
     
     def _get_metadata_path(self, cache_path: Path) -> Path:
         """Get metadata file path"""

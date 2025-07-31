@@ -149,7 +149,8 @@ class PlayerNormalizer:
         filtered = [c for c in candidates if self._validate_match(c, team, position)]
         
         if not filtered:
-            filtered = candidates
+            # If team/position validation filters out all candidates, return None
+            return None
         
         # Prepare names for matching
         candidate_names = [(c, self.normalize_name(c.name)) for c in filtered]

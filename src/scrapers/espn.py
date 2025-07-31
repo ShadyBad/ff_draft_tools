@@ -82,39 +82,11 @@ class ESPNScraper(BaseScraper):
         rankings = []
         
         try:
-            # ESPN API headers
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'application/json',
-                'X-Fantasy-Source': 'kona',
-                'X-Fantasy-Platform': 'kona-PROD-6ee258cdf6e4872adfe0eb979035f01c523049f1',
-            }
+            # ESPN API is often unreliable or returns incorrect data
+            # For now, we'll skip the API and use fallback rankings
+            logger.info("ESPN API temporarily disabled - using curated rankings")
+            return []
             
-            # Parameters for top 300 players
-            params = {
-                'scoringPeriodId': '1',
-                'seasonId': '2025',
-                'statSourceId': '1',  # Projections
-                'statSplitTypeId': '0',  # Season
-                'limit': '300',
-                'offset': '0',
-                'sortPercOwned': '-1',
-                'sortDraftAveragePosition': '-1',
-                'view': 'kona_player_info'
-            }
-            
-            response = self.session.get(self.api_url, headers=headers, params=params, timeout=30)
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Extract players from response
-                if 'players' in data:
-                    for idx, player_data in enumerate(data['players'], 1):
-                        ranking = self._parse_api_player(player_data, idx)
-                        if ranking:
-                            rankings.append(ranking)
-                            
         except Exception as e:
             logger.debug(f"ESPN API error: {e}")
         
@@ -376,50 +348,60 @@ class ESPNScraper(BaseScraper):
         """Return fallback ESPN rankings for 2025 season"""
         logger.info("Using ESPN fallback rankings for 2025 season")
         
-        # Top 50 consensus players with ESPN-style projections
+        # Top 50 consensus players with ESPN-style projections for 2025
         fallback_data = [
-            # Running Backs
+            # Running Backs - Top tier
             ("Saquon Barkley", "RB", "PHI", 1, 380),
             ("Bijan Robinson", "RB", "ATL", 2, 360),
-            ("Jahmyr Gibbs", "RB", "DET", 3, 340),
-            ("Derrick Henry", "RB", "BAL", 5, 310),
-            ("Ashton Jeanty", "RB", "LV", 6, 300),
-            ("Christian McCaffrey", "RB", "SF", 8, 280),
-            ("Jonathan Taylor", "RB", "IND", 10, 270),
-            ("De'Von Achane", "RB", "MIA", 12, 260),
-            ("Josh Jacobs", "RB", "GB", 15, 250),
-            ("Kenneth Walker III", "RB", "SEA", 18, 240),
+            ("Jahmyr Gibbs", "RB", "DET", 5, 340),
+            ("Derrick Henry", "RB", "BAL", 7, 310),
+            ("Breece Hall", "RB", "NYJ", 10, 300),
+            ("Christian McCaffrey", "RB", "SF", 14, 280),
+            ("Jonathan Taylor", "RB", "IND", 15, 270),
+            ("De'Von Achane", "RB", "MIA", 17, 260),
+            ("Josh Jacobs", "RB", "GB", 18, 250),
+            ("Kenneth Walker III", "RB", "SEA", 22, 240),
+            ("Kyren Williams", "RB", "LAR", 26, 230),
+            ("James Cook", "RB", "BUF", 29, 220),
             
-            # Wide Receivers
-            ("Ja'Marr Chase", "WR", "CIN", 4, 320),
-            ("Justin Jefferson", "WR", "MIN", 7, 300),
-            ("CeeDee Lamb", "WR", "DAL", 9, 290),
-            ("Puka Nacua", "WR", "LAR", 11, 280),
-            ("Nico Collins", "WR", "HOU", 13, 270),
-            ("Malik Nabers", "WR", "NYG", 14, 265),
-            ("Brian Thomas Jr.", "WR", "JAX", 16, 255),
-            ("Amon-Ra St. Brown", "WR", "DET", 17, 250),
-            ("A.J. Brown", "WR", "PHI", 19, 245),
-            ("Drake London", "WR", "ATL", 20, 240),
+            # Wide Receivers - Elite tier
+            ("Ja'Marr Chase", "WR", "CIN", 3, 340),
+            ("Justin Jefferson", "WR", "MIN", 4, 320),
+            ("CeeDee Lamb", "WR", "DAL", 6, 300),
+            ("Puka Nacua", "WR", "LAR", 8, 285),
+            ("Nico Collins", "WR", "HOU", 9, 270),
+            ("Malik Nabers", "WR", "NYG", 11, 265),
+            ("Brian Thomas Jr.", "WR", "JAX", 12, 255),
+            ("Amon-Ra St. Brown", "WR", "DET", 13, 250),
+            ("A.J. Brown", "WR", "PHI", 16, 245),
+            ("Drake London", "WR", "ATL", 19, 240),
+            ("Davante Adams", "WR", "LAR", 20, 235),
+            ("Marvin Harrison Jr.", "WR", "ARI", 21, 230),
+            ("Chris Olave", "WR", "NO", 24, 225),
+            ("Rashee Rice", "WR", "KC", 25, 220),
             
             # Tight Ends
-            ("George Kittle", "TE", "SF", 21, 290),
-            ("Brock Bowers", "TE", "LV", 25, 240),
-            ("Trey McBride", "TE", "ARI", 28, 220),
-            ("Travis Kelce", "TE", "KC", 32, 200),
-            ("Dalton Kincaid", "TE", "BUF", 35, 190),
+            ("George Kittle", "TE", "SF", 23, 190),
+            ("Brock Bowers", "TE", "LV", 27, 175),
+            ("Trey McBride", "TE", "ARI", 30, 165),
+            ("Travis Kelce", "TE", "KC", 35, 155),
+            ("Dalton Kincaid", "TE", "BUF", 38, 145),
+            ("Kyle Pitts", "TE", "ATL", 42, 140),
             
             # Quarterbacks
-            ("Patrick Mahomes", "QB", "KC", 22, 400),
-            ("Jalen Hurts", "QB", "PHI", 23, 395),
-            ("Lamar Jackson", "QB", "BAL", 24, 390),
-            ("Josh Allen", "QB", "BUF", 26, 385),
-            ("Dak Prescott", "QB", "DAL", 27, 370),
-            ("Joe Burrow", "QB", "CIN", 29, 365),
-            ("Justin Herbert", "QB", "LAC", 30, 360),
-            ("Tua Tagovailoa", "QB", "MIA", 31, 355),
-            ("Jayden Daniels", "QB", "WAS", 33, 350),
-            ("Drake Maye", "QB", "NE", 34, 340),
+            ("Patrick Mahomes", "QB", "KC", 28, 400),
+            ("Jalen Hurts", "QB", "PHI", 31, 395),
+            ("Lamar Jackson", "QB", "BAL", 32, 390),
+            ("Josh Allen", "QB", "BUF", 33, 385),
+            ("Dak Prescott", "QB", "DAL", 34, 370),
+            ("Joe Burrow", "QB", "CIN", 36, 365),
+            ("Justin Herbert", "QB", "LAC", 37, 360),
+            ("Tua Tagovailoa", "QB", "MIA", 39, 355),
+            ("Jayden Daniels", "QB", "WAS", 40, 350),
+            ("Drake Maye", "QB", "NE", 41, 340),
+            ("C.J. Stroud", "QB", "HOU", 43, 335),
+            ("Anthony Richardson", "QB", "IND", 44, 330),
+            ("Jordan Love", "QB", "GB", 45, 325),
         ]
         
         rankings = []

@@ -2,6 +2,7 @@
 import pytest
 import tempfile
 import time
+import json
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -49,14 +50,14 @@ class TestOptimizedCache:
     
     def test_cache_expiry(self, cache):
         """Test cache expiration"""
-        # Set cache with very short expiry
-        cache.set("expiring_key", "data", cache_hours=0.0001)  # Very short
+        # Set cache with very short expiry (1 second)
+        cache.set("expiring_key", "data", cache_hours=1/3600)  # 1 second
         
         # Should still be available immediately
         assert cache.get("expiring_key") == "data"
         
-        # Wait a bit
-        time.sleep(0.1)
+        # Wait for expiry
+        time.sleep(1.1)  # Wait slightly longer than expiry
         
         # Should be expired now
         assert cache.get("expiring_key") is None
@@ -188,7 +189,17 @@ class TestOptimizedCache:
         """Test cache error handling"""
         # Test get with corrupted file
         cache_path = cache._get_cache_path("corrupt_key")
+        meta_path = cache._get_metadata_path(cache_path)
+        
+        # Create corrupted cache file and valid metadata
         cache_path.write_text("corrupted data")
+        meta_data = {
+            'key': 'corrupt_key',
+            'created': datetime.now().isoformat(),
+            'expires': (datetime.now() + timedelta(hours=1)).isoformat()
+        }
+        with open(meta_path, 'w') as f:
+            json.dump(meta_data, f)
         
         # Should return None instead of crashing
         result = cache.get("corrupt_key")

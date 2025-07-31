@@ -87,6 +87,16 @@ RANKING_SOURCES = {
         "url": "https://fantasy.espn.com/football/players/projections",
         "weight": 0.9,
         "cache_hours": 12
+    },
+    "nfl": {
+        "url": "https://www.nfl.com/news/2025-nfl-fantasy-football-rankings",
+        "weight": 1.0,
+        "cache_hours": 12
+    },
+    "cbs": {
+        "url": "https://www.cbssports.com/fantasy/football/rankings/",
+        "weight": 0.95,
+        "cache_hours": 12
     }
 }
 

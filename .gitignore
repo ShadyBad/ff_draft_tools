@@ -38,4 +38,4 @@ CLAUDE.md
 
 # Keep only essential data files
 \!data/player_mappings.json
-EOF < /dev/null
+EOF < /dev/nullcredentials/
