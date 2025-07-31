@@ -1,0 +1,1 @@
+"""Test suite for Fantasy Football Draft Tools"""

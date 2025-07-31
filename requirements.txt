@@ -1,0 +1,41 @@
+# Core dependencies
+requests==2.31.0
+beautifulsoup4==4.12.2
+pandas==2.1.4
+numpy==1.26.2
+
+# Yahoo Fantasy API
+yfpy==16.0.0
+yahoo-oauth==2.0
+
+# Google Sheets integration
+gspread==5.12.3
+google-auth==2.25.2
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+
+# Web scraping
+lxml==4.9.4
+html5lib==1.1
+
+# Web interface
+flask==3.0.0
+flask-cors==4.0.0
+
+# Data processing
+fuzzywuzzy==0.18.0
+rapidfuzz==3.13.0  # Faster alternative to python-Levenshtein
+
+# Utilities
+python-dotenv==1.0.0
+click==8.1.7
+rich==13.7.0  # For nice CLI output
+psutil==7.0.0  # For system monitoring
+
+# Development dependencies
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+black==23.12.1
+ruff==0.1.9
+mypy==1.8.0
