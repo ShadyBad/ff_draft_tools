@@ -9,6 +9,7 @@ from typing import List, Dict, Optional
 
 from src.core.models import ConsensusRanking, Position
 from config import OUTPUT_DIR
+from .value_sheet import ValueSheetExporter
 
 
 logger = logging.getLogger(__name__)
@@ -284,6 +285,7 @@ class CSVExporter:
             },
             'description': {
                 'cheat_sheet': 'Quick reference for draft day (Top 300)',
+                'value_sheet': 'Simplified value format with points above baseline',
                 'overall': 'Detailed rankings with all stats',
                 'tiers': 'Players grouped by position and tier',
                 'position_files': 'Separate rankings for each position'
@@ -304,6 +306,7 @@ class CSVExporter:
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             f.write("FILES:\n")
             f.write("- cheat_sheet.csv: Quick reference for draft day (print this!)\n")
+            f.write("- value_sheet.txt: Simplified value format with points above baseline\n")
             f.write("- overall_rankings.csv: Detailed rankings with variance\n")
             f.write("- tier_rankings.csv: Players grouped by tiers\n")
             f.write("- QB_rankings.csv: Quarterback rankings\n")
@@ -348,6 +351,11 @@ class CSVExporter:
         position_files = self.export_position_rankings(rankings, export_dir, timestamp)
         for pos, filepath in position_files.items():
             exported[f'position_{pos.value}'] = filepath
+        
+        # Export value sheet format
+        value_exporter = ValueSheetExporter()
+        value_sheet_path = value_exporter.export_value_sheet(rankings)
+        exported['value_sheet'] = value_sheet_path
         
         # Create summary file
         self.create_summary_file(export_dir, timestamp, exported)
